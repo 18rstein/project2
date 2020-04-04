@@ -1,5 +1,5 @@
 ---
-title: "Actual Tutorial"
+title: "Wrangling with College Costs: A Data Wrangling Tutorial"
 output: learnr::tutorial
 runtime: shiny_prerendered
 ---
@@ -7,7 +7,7 @@ runtime: shiny_prerendered
 ## Introduction
 So you want to data wrangle?
 
-Today we are going to work with college tuition data to put things into perspective and answer the questions: Is college really worth it?
+Today we are going to explore college tuition data. We all have opinions on college costs, but let's explore the data to see if there are any interesting patterns we might want to look into later.
 
 Most of this data originally comes from the US Department of Education, but the most easily accesible form of it was found on Tuitiontracker.org.This data contains information about the costs for all types of students, in-state, out-of-state, etc., from all types of schools. It also goes into the diversity of the schools and the salaries of alumni. Let's dig in!
 
@@ -26,15 +26,16 @@ diversity_school <- readr::read_csv('https://raw.githubusercontent.com/rfordatas
 
 library(tidyverse)
 library(learnr)
-library(plotly)
+library(plotly) #this is for data visualization, not essential for data wrangling, but fun!
 ```
 
-##Basic Data Wrangling Operations
+##Filter, Arrange, Select
 
 First let's look at the main tuition_cost table:
 ```{r}
 head(tuition_cost)
 ```
+
 I live in New York, so I am intersted in looking at just schools in New York. I also just want to look at 4 year schools. I can do this by using the filter function:
 ```{r}
 tuition_cost_NY = tuition_cost %>% #This pipeline operator is used to "pipe" any data through a function
@@ -43,6 +44,7 @@ tuition_cost_NY = tuition_cost %>% #This pipeline operator is used to "pipe" any
 
 head(tuition_cost_NY)
 ```
+
 Now let's say that I am only interested in the tuition cost, because I know that room and board is going to be about the same price and just vary based on location.I can only show the columns that I care about, and then I can rearrange the table by in_state_tuition:
 ```{r}
 tuition_cost_NY = tuition_cost_NY %>% 
@@ -63,6 +65,7 @@ It's a good thing we made a chart because I completely forgot about the "For Pro
 tuition_cost_NY %>%
   count(type)
 ```
+
 Only four, but I'm annoyed that they exist at all! I would never consider a For-Profit school, so I am going to remake the boxplot without that variable:
 ```{r}
 tuition_cost_NY %>%
@@ -70,7 +73,9 @@ tuition_cost_NY %>%
   ggplot(aes(x = type, y = in_state_tuition)) + geom_boxplot()
 ```
 
-Wow! At first glance, this REALLY builds the case for going to a public school. The wide range for Private interests me though...and in the next section, we will get financial aid involved in our decision. 
+Wow! At first glance, this REALLY builds the case for going to a public school. The wide range for Private interests me though...
+
+We all know that financial aid can change this a lot, so we will look at the tuition_income dataframe in the next section.
 
 Before we go on though, try exercise 1: 
 
@@ -95,27 +100,30 @@ tuition_cost_5 %>%
   ggplot(aes(x = state, y = in_state_tuition)) + geom_boxplot()
 ```
 
-##Joins and a Tangent
+##Joins (and a little tangent)
 
 Now let's dive a little deeper. The box plot we made before shows the price of college, but we all know that financial aid and scholarships can make a huge difference in the total cost. The tuition_income data frame below gives the net cost for each income level, both on and off campus, for each university:
 ```{r}
 head(tuition_income)
 ```
+
 I am curious to see if there is data from every university from 2016-2018 as there is for Piedmont International University, which just happens to be the first school in the table. I am going to use the count function again to do so:
 ```{r}
 count(tuition_income, year)
 ```
-Hmmm...it looks like there is the most data for 2018, so I am going to stick with that year, especially since the supposed purpose of my analysis is to advise future students, not to do a general analysis of the cost of college over time.
 
+Hmmm...it looks like there is the most data for 2018, so I am going to stick with that year, especially since the supposed purpose of my analysis is to advise future students, not to do a general analysis of the cost of college over time.
 ```{r}
 tuition_income_2018 = tuition_income %>%
   filter(year == '2018')
 head(tuition_income_2018)
 ```
+
 Let's also check to see that there is both on campus and off campus data for every income bracket in 2018:
 ```{r}
 count(tuition_income_2018, campus)
 ```
+
 That's weird...why might there be so many more off campus entries? Let's do some investigating. The first explanation that comes to mind is that maybe some schools are just inherently off campus, like community colleges and other two year programs. How can I eliminate community colleges to test my theory though? This is where joins come in!
 
 ###Joins
@@ -151,12 +159,14 @@ tuition_2018_join %>%
   filter(degree_length == '4 Year') %>%
   count(campus)
 ```
+
 This shows that the 2 year colleges account for a large part of the "missing"" data
 ```{r}
 tuition_2018_join %>% 
   filter(degree_length == '2 Year') %>%
   count(campus)
 ```
+
 I ran this just to make sure. It definitely confirms that a lot of the schools that only had off campus data were 2 year schools.But, that doesn't really prove it, to be sure, I counted the degree length column to see if I was missing anything:
 ```{r}
 tuition_2018_join %>%
@@ -164,6 +174,7 @@ tuition_2018_join %>%
 
 7825/(5910 + 13195)
 ```
+
 Wow! I am definitely confused! There are 41% of schools that are either not 4 year or 2 year schools, or just didn't feel like reporting...something seems off. Let's check the original data fram to see if something went wrong in the join.
 ```{r}
 tuition_cost%>%
@@ -188,7 +199,6 @@ left_join(tuition_income, by = 'name') %>%
 ```
 
 
-
 ##Group by and Summarize
 
 Let's go back to our tuition_2018_join table. We can calculate the average net cost of college and the standard deviation using the summarize function:
@@ -209,11 +219,7 @@ tuition_summary
 As we did in the first section, we can create a graphics to visualize patterns:
 
 ```{r}
-tuition_summary = tuition_2018_join %>%
-  group_by(income_lvl) %>%
-  summarize(net_cost_mean = mean(net_cost), net_cost_sd = sd(net_cost))
-
-#ggplot(data = tuition_summary, aes(x = income_lvl, y = net_cost_mean)) + geom_col() + geom_errorbar(data = tuition_summary, aes(ymin = net_cost_mean - net_cost_sd, ymax = net_cost_mean + net_cost_sd)) + facet_wrap (~ campus) + coord_flip()
+ggplot(data = tuition_summary, aes(x = income_lvl, y = net_cost_mean)) + geom_col() + geom_errorbar(data = tuition_summary, aes(ymin = net_cost_mean - net_cost_sd, ymax = net_cost_mean + net_cost_sd)) + facet_wrap (~ campus) + coord_flip()
 ```
 
 While there is definitely a trend that lower income level students have a lower net cost, and off campus students have a lower net cost, the error bars, showing the standard deviation, show that there is still a huge range that people are expected to pay. For both on campus and off campus students in the 0-30000 bracket, some have a net cost of over 20000 dollars! That's crazy!
@@ -230,82 +236,28 @@ in_out_tuition = tuition_cost %>%
 
 ggplotly(in_out_tuition)
 
-#I do not see the plot in my html file or in my viewer on R, but my viewer also wouldn't load the interactive plot from the notes, and I WAS able to see my interactive plot when I exported it as a webpage, so it is in this folder as In State vs Out of State Tuition Plot
+#I do not see the plot in my html file or in my viewer on R, but my viewer also wouldn't load the interactive plot from the notes, and I WAS able to see my interactive plot when I exported it as a webpage, so it is in this folder as "In State vs Out of State Tuition Plot"
 
 ```
 
-
-
-join tuition_cost and tuition_income to group by public and private schools as well.
-
-group by income level to see net cost
-
-One of the first considerations people make are if they will go to a private school or a public school. However, the same person might make a different decision depending on what state they live in.How do you see the average price of a school by state though?
-
-This is when the group-by and summarize function come in
-
-##Joins
-
-##Plots
-
-### Exercise 
-
-*Here's a simple exercise with an empty code chunk provided for entering the answer.*
-
-Write the R code required to add two plus two:
-
-```{r two-plus-two, exercise=TRUE}
-
+###Exercise 3
+Use the diversity_school dataframe to create a summary table of the average percent enrollment of each category in schools across the US.You will have to create a percent enrollment column using the mutate function which I didn't show before, so I did it already. I also printed the dataframe so you can look at it to help group the data.
+```{r diversity, exercise = TRUE}
+diversity_school = diversity_school %>%
+  mutate(percent_enrollment = round((enrollment/total_enrollment) * 100, digits = 2)) #I also used the round function to make it prettier
 ```
 
-### Exercise with Code
 
-*Here's an exercise with some prepopulated code as well as `exercise.lines = 5` to provide a bit more initial room to work.*
-
-Now write a function that adds any two numbers and then call it:
-
-```{r add-function, exercise=TRUE, exercise.lines = 5}
-add <- function() {
-  
-}
+```{r diversity-solution}
+diversity_school = diversity_school %>%
+  mutate(percent_enrollment = round((enrollment/total_enrollment) * 100, digits = 2))
+diversity_school %>%
+  group_by(category) %>%
+  summarize(average_percent = mean(percent_enrollment))
 ```
 
-## Topic 2
+##Conclusion
 
-### Exercise with Hint
+###Congragulations! 
 
-*Here's an exercise where the chunk is pre-evaulated via the `exercise.eval` option (so the user can see the default output we'd like them to customize). We also add a "hint" to the correct solution via the chunk immediate below labeled `print-limit-hint`.*
-
-Modify the following code to limit the number of rows printed to 5:
-
-```{r print-limit, exercise=TRUE, exercise.eval=TRUE}
-mtcars
-```
-
-```{r print-limit-hint}
-head(mtcars)
-```
-
-### Quiz
-
-*You can include any number of single or multiple choice questions as a quiz. Use the `question` function to define a question and the `quiz` function for grouping multiple questions together.*
-
-Some questions to verify that you understand the purposes of various base and recommended R packages:
-
-```{r quiz}
-quiz(
-  question("Which package contains functions for installing other R packages?",
-    answer("base"),
-    answer("tools"),
-    answer("utils", correct = TRUE),
-    answer("codetools")
-  ),
-  question("Which of the R packages listed below are used to create plots?",
-    answer("lattice", correct = TRUE),
-    answer("tools"),
-    answer("stats"),
-    answer("grid", correct = TRUE)
-  )
-)
-```
-
+You are now an amazing data wrangler! You also know a little more about college tuition prices and diversity. There is definitely a lot more to uncover, so I encourage you to download the dataset from the introduction and look through it yourself while practicing your newly learned datawrangling functions.
