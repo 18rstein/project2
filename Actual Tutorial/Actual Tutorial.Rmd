@@ -26,9 +26,10 @@ diversity_school <- readr::read_csv('https://raw.githubusercontent.com/rfordatas
 
 library(tidyverse)
 library(learnr)
+library(plotly)
 ```
 
-##Simple Data Wrangling
+##Basic Data Wrangling Operations
 
 First let's look at the main tuition_cost table:
 ```{r}
@@ -94,8 +95,151 @@ tuition_cost_5 %>%
   ggplot(aes(x = state, y = in_state_tuition)) + geom_boxplot()
 ```
 
+##Joins and a Tangent
 
-##Summarize and Group by
+Now let's dive a little deeper. The box plot we made before shows the price of college, but we all know that financial aid and scholarships can make a huge difference in the total cost. The tuition_income data frame below gives the net cost for each income level, both on and off campus, for each university:
+```{r}
+head(tuition_income)
+```
+I am curious to see if there is data from every university from 2016-2018 as there is for Piedmont International University, which just happens to be the first school in the table. I am going to use the count function again to do so:
+```{r}
+count(tuition_income, year)
+```
+Hmmm...it looks like there is the most data for 2018, so I am going to stick with that year, especially since the supposed purpose of my analysis is to advise future students, not to do a general analysis of the cost of college over time.
+
+```{r}
+tuition_income_2018 = tuition_income %>%
+  filter(year == '2018')
+head(tuition_income_2018)
+```
+Let's also check to see that there is both on campus and off campus data for every income bracket in 2018:
+```{r}
+count(tuition_income_2018, campus)
+```
+That's weird...why might there be so many more off campus entries? Let's do some investigating. The first explanation that comes to mind is that maybe some schools are just inherently off campus, like community colleges and other two year programs. How can I eliminate community colleges to test my theory though? This is where joins come in!
+
+###Joins
+
+A join combines two tables together. There are four kinds: left_join, inner_join, right_join, and full_join. A left join matches the values in the "left" data frame with the values in the "right" data frame and only attaches the rows from the right data frame if it had a matching value with the left data frame. None of the values from the left data frame are removed though, meaning that there will likely be several rows that have "N/A" values if they did not have a matching row in the right data frame. This means that the number of rows will stay the same as the left data frame after a left join is used, and vice-versa for a right_join.
+
+In an inner_join, only rows that have matching values for both data frames are kept. This means if there are any non-matching values, there will be fewer total rows than the right and left data sets. In a full_join, all the rows are combined.
+
+This might be hard to picture, but it just takes some examples and some practice to wrap your mind around. Let's go back to the college data set. I want to combine the tuition_cost and the tuition_income tables since the tuition_cost table tells me if a school is a two year school or a four year school. This will help me eliminate colleges that probably do not have on campus housing options, and will help me figure out if that is the reason there are a lot more data points for off-campus housing.
+
+```{r}
+tuition_2018_join = left_join(tuition_income_2018, tuition_cost, by = 'name') #notice I am using a left-join because I only want data for the schools in the tuition_income_2018 table
+
+tuition_2018_join
+
+nrow(tuition_2018_join)
+nrow(tuition_income_2018)
+```
+
+There are more rows in my joined table than my original "left" table, so I am checking why. One explanation might be that there are some schools listed twice on the tuition_cost table.
+```{r}
+#I am using unique() to identify all the unique entries, then counting the number of unique entries with length()
+#I am then comparing that with the number of rows in the entire data set
+length(unique(tuition_cost$name)) 
+nrow(tuition_cost)
+```
+
+That explains why there are more rows in my joined table
+
+Now that the tables are joined, I am going to filter out the 2 year schools and then recount the off campus and on campus data entries:
+```{r}
+tuition_2018_join %>% 
+  filter(degree_length == '4 Year') %>%
+  count(campus)
+```
+This shows that the 2 year colleges account for a large part of the "missing"" data
+```{r}
+tuition_2018_join %>% 
+  filter(degree_length == '2 Year') %>%
+  count(campus)
+```
+I ran this just to make sure. It definitely confirms that a lot of the schools that only had off campus data were 2 year schools.But, that doesn't really prove it, to be sure, I counted the degree length column to see if I was missing anything:
+```{r}
+tuition_2018_join %>%
+  count(degree_length)
+
+7825/(5910 + 13195)
+```
+Wow! I am definitely confused! There are 41% of schools that are either not 4 year or 2 year schools, or just didn't feel like reporting...something seems off. Let's check the original data fram to see if something went wrong in the join.
+```{r}
+tuition_cost%>%
+  count(degree_length)
+```
+
+This means that if all the names were the same in both table there should only be one "Other" value, so this indicates that the data came from different sources since so many schools do not line up. Some quick google searches show that some schools have two different names, some might have been accredited too recently to be included in one dataframe, and some look like "fake" for profit schools that one data collector might not have counted. Depending on what we do with the data, this might be important to take into account. This shows that data wrangling functions can also be used to analyze the quality of the data itself, which might be important when qualifying your results.
+
+
+###Exercise 2
+Use an appropriate join and other basic functions from the last topic to make a table showing the net cost of each school for housholds that make 48001-75000 dollars per year and the early career pay. (Join the salary_potential and tuition_income dataframes, it will probably help if you view them first)
+```{r join, exercise= TRUE}
+
+```
+
+```{r join-solution}
+salary_potential %>%
+left_join(tuition_income, by = 'name') %>%
+  filter(income_lvl == '48_001 to 75,000') %>%
+  select(name, early_career_pay, net_cost, year)
+
+```
+
+
+
+##Group by and Summarize
+
+Let's go back to our tuition_2018_join table. We can calculate the average net cost of college and the standard deviation using the summarize function:
+```{r}
+tuition_2018_join %>%
+  summarize(net_cost_mean = mean(net_cost), net_cost_sd = sd(net_cost))
+```
+
+This would be a lot more helpful if we could calculate by income level...well we can! Before summarizing use the group by function:
+```{r}
+tuition_summary = tuition_2018_join %>%
+  group_by(income_lvl, campus) %>% #I am grouping both by income and off campus or on campus
+  summarize(net_cost_mean = mean(net_cost), net_cost_sd = sd(net_cost))
+
+tuition_summary
+```
+
+As we did in the first section, we can create a graphics to visualize patterns:
+
+```{r}
+tuition_summary = tuition_2018_join %>%
+  group_by(income_lvl) %>%
+  summarize(net_cost_mean = mean(net_cost), net_cost_sd = sd(net_cost))
+
+#ggplot(data = tuition_summary, aes(x = income_lvl, y = net_cost_mean)) + geom_col() + geom_errorbar(data = tuition_summary, aes(ymin = net_cost_mean - net_cost_sd, ymax = net_cost_mean + net_cost_sd)) + facet_wrap (~ campus) + coord_flip()
+```
+
+While there is definitely a trend that lower income level students have a lower net cost, and off campus students have a lower net cost, the error bars, showing the standard deviation, show that there is still a huge range that people are expected to pay. For both on campus and off campus students in the 0-30000 bracket, some have a net cost of over 20000 dollars! That's crazy!
+
+###Another Example
+After exercise 1, I have been interested in the prices of state schools overall. When I was in high school looking at colleges, I thought it was wild that someone would go to another state's state school. Then I realized Berkely was a state school and I had no idea what any state school in Nebraska was called. I noticed that my big R1 state universities were less than half the price of UC Berkely or UCLA. That is why I was interested in making the following plot to look at the average in state and out of state tuitions of every state's public schools.
+```{r}
+in_out_tuition = tuition_cost %>% 
+  filter(type == 'Public') %>%
+  group_by(state) %>%
+  summarize(in_state_tuition = mean(in_state_tuition), out_of_state_tuition= mean(out_of_state_tuition)) %>%
+  ggplot(aes(x = in_state_tuition, y = out_of_state_tuition)) + geom_point(aes(color = state)) + labs(x = "In State Tuition", y = "Out of State Tuition", title = "In State and Out of State Tuitions", subtitle = "for Each State's Public School System",
+       color = "State") + theme_minimal()
+
+ggplotly(in_out_tuition)
+
+#I do not see the plot in my html file or in my viewer on R, but my viewer also wouldn't load the interactive plot from the notes, and I WAS able to see my interactive plot when I exported it as a webpage, so it is in this folder as In State vs Out of State Tuition Plot
+
+```
+
+
+
+join tuition_cost and tuition_income to group by public and private schools as well.
+
+group by income level to see net cost
+
 One of the first considerations people make are if they will go to a private school or a public school. However, the same person might make a different decision depending on what state they live in.How do you see the average price of a school by state though?
 
 This is when the group-by and summarize function come in
